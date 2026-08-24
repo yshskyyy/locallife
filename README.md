@@ -2,7 +2,7 @@
 
 基于 Java 17、Spring Boot 3.5.14、PostgreSQL 和 Redis 的本地点评单体项目。当前 Docker Compose 交付保持 Phase 0 核心业务逻辑不变，包含验证码登录、商户缓存、Redis Lua 秒杀及 Redis Stream 异步下单。
 
-当前工程版本：`1.0.0`。只有完成完整运行态验收后才创建并推送 Git 标签 `v1.0.0`。
+当前工程版本：`1.0.0`。
 
 ## 技术栈
 
