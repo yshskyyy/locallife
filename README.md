@@ -164,6 +164,12 @@ Docker 多阶段构建也会在独立 Maven 构建阶段生成可执行 Jar；�
 
 实际验收命令、结果及尚未通过的项目记录在 [`docs/verification.md`](docs/verification.md)。该文档只记录真实执行结果。
 
+当前验证状态：
+
+- Maven 自动化测试和 `clean package` 已实际执行并通过：9 个测试，失败 0、错误 0、跳过 0。
+- `docker compose config --quiet` 已通过，配置可解析为 `postgres`、`redis`、`backend` 三个服务。
+- Docker 端到端运行验收尚未完成：Docker Hub 连接超时导致基础镜像无法拉取，因此不能声称三个容器健康及完整业务链路已在 Compose 环境通过。
+
 ## 停止
 
 停止容器并保留 PostgreSQL、Redis 数据：
