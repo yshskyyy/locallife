@@ -1,5 +1,9 @@
 HELP.md
 target/
+.DS_Store
+**/.DS_Store
+*.log
+logs/
 ### Local environment secrets ###
 .env
 .env.*
