@@ -14,7 +14,7 @@ RUN addgroup -S spring && adduser -S spring -G spring
 WORKDIR /app
 
 COPY --from=build --chown=spring:spring \
-    /workspace/target/local-review-platform-0.0.1-SNAPSHOT.jar \
+    /workspace/target/local-review-platform-1.0.0.jar \
     /app/application.jar
 
 USER spring:spring
