@@ -12,11 +12,11 @@ public class CreateBusinessRequest {
     @NotBlank(message = "Address is required")
     private String address;
 
-    private Double rating;
-
     private Double longitude;
 
     private Double latitude;
+
+    private Long brandId;
 
     public String getName() {
         return name;
@@ -30,15 +30,15 @@ public class CreateBusinessRequest {
         return address;
     }
 
-    public Double getRating() {
-        return rating;
-    }
-
     public Double getLatitude(){
         return latitude;
     }
 
     public Double getLongitude(){
         return longitude;
+    }
+
+    public Long getBrandId() {
+        return brandId;
     }
 }

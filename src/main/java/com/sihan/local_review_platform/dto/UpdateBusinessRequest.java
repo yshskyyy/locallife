@@ -7,6 +7,7 @@ public class UpdateBusinessRequest {
     private Double rating;
     private Double longitude;
     private Double latitude;
+    private Long brandId;
 
     public String getName(){
         return name;
@@ -30,5 +31,9 @@ public class UpdateBusinessRequest {
 
     public Double getLatitude() {
         return latitude;
+    }
+
+    public Long getBrandId() {
+        return brandId;
     }
 }

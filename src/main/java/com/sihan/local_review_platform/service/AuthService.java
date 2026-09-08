@@ -6,6 +6,7 @@ import com.sihan.local_review_platform.common.BusinessException;
 import com.sihan.local_review_platform.dto.LoginRequest;
 import com.sihan.local_review_platform.dto.UserSession;
 import com.sihan.local_review_platform.entity.User;
+import com.sihan.local_review_platform.entity.UserRole;
 import com.sihan.local_review_platform.repository.UserRepository;
 import com.sihan.local_review_platform.utils.RedisKeys;
 import org.springframework.beans.factory.annotation.Value;
@@ -50,9 +51,16 @@ public class AuthService {
             throw new BusinessException("INVALID_CODE", "Invalid or expired verification code", HttpStatus.BAD_REQUEST);
         }
 
-        User user = findOrCreateUser(request.getPhone());
+        UserRole requestedRole = UserRole.valueOf(request.getLoginMode());
+        User user = findOrCreateUser(request.getPhone(), requestedRole);
+        if (user.getRole() != requestedRole) {
+            String message = requestedRole == UserRole.MERCHANT
+                    ? "该账号不是商户账号，无法登录商户后台"
+                    : "该账号是商户账号，请使用商户登录";
+            throw new BusinessException("LOGIN_ROLE_MISMATCH", message, HttpStatus.FORBIDDEN);
+        }
         String token = UUID.randomUUID().toString();
-        saveSession(token, new UserSession(user.getId(), user.getPhone(), user.getNickname()));
+        saveSession(token, new UserSession(user.getId(), user.getPhone(), user.getNickname(), user.getRole()));
         redis.delete(RedisKeys.LOGIN_CODE + request.getPhone());
         return token;
     }
@@ -77,13 +85,14 @@ public class AuthService {
         if (token != null) redis.delete(RedisKeys.LOGIN_TOKEN + token);
     }
 
-    private User findOrCreateUser(String phone) {
+    private User findOrCreateUser(String phone, UserRole requestedRole) {
         return userRepository.findByPhone(phone).orElseGet(() -> {
-            User user = new User();
-            user.setPhone(phone);
-            user.setNickname("user_" + phone.substring(Math.max(0, phone.length() - 4)));
+            User created = new User();
+            created.setPhone(phone);
+            created.setNickname("user_" + phone.substring(Math.max(0, phone.length() - 4)));
+            created.setRole(requestedRole);
             try {
-                return userRepository.saveAndFlush(user);
+                return userRepository.saveAndFlush(created);
             } catch (DataIntegrityViolationException concurrentCreate) {
                 return userRepository.findByPhone(phone).orElseThrow(() -> concurrentCreate);
             }

@@ -5,7 +5,6 @@ import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.connection.stream.*;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -117,35 +116,14 @@ public class OrderStreamConsumer {
             transactionService.createOrder(voucherId, userId);
             acknowledge(record);
             redis.opsForHash().delete(RedisKeys.STREAM_RETRY, record.getId().getValue());
-        } catch (DataIntegrityViolationException duplicate) {
-            // The database unique key is the final idempotency boundary.
-            acknowledge(record);
         } catch (Exception failure) {
             long attempts = redis.opsForHash().increment(RedisKeys.STREAM_RETRY, record.getId().getValue(), 1);
             log.warn("Order message {} failed on attempt {}/{}", record.getId(), attempts, maxRetries, failure);
-            if (attempts >= maxRetries) {
-                moveToDeadLetterAndCompensate(record, values, userId, voucherId, failure);
-                acknowledge(record);
-                redis.opsForHash().delete(RedisKeys.STREAM_RETRY, record.getId().getValue());
+            if (attempts == maxRetries) {
+                log.error("Order message {} reached the retry warning threshold and remains pending", record.getId());
             }
+            pauseAfterInfrastructureFailure();
         }
-    }
-
-    private void moveToDeadLetterAndCompensate(MapRecord<String, Object, Object> record,
-                                                Map<Object, Object> values, Long userId, Long voucherId,
-                                                Exception failure) {
-        redis.opsForStream().add(StreamRecords.mapBacked(Map.of(
-                "originalId", record.getId().getValue(),
-                "userId", userId == null ? "unknown" : userId.toString(),
-                "voucherId", voucherId == null ? "unknown" : voucherId.toString(),
-                "requestId", values.getOrDefault("requestId", "unknown").toString(),
-                "error", failure.getClass().getSimpleName()
-        )).withStreamKey(RedisKeys.STREAM_DEAD));
-        if (voucherId != null && userId != null) {
-            redis.opsForValue().increment(RedisKeys.SECKILL_STOCK + voucherId);
-            redis.opsForSet().remove(RedisKeys.SECKILL_ORDER + voucherId, userId.toString());
-        }
-        log.error("Order message {} moved to dead-letter stream and Redis reservation compensated", record.getId());
     }
 
     private void acknowledge(MapRecord<String, Object, Object> record) {

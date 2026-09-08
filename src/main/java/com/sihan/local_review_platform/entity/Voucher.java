@@ -4,6 +4,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -23,6 +25,10 @@ public class Voucher {
     private LocalDateTime beginTime;
 
     private LocalDateTime endTime;
+
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "business_id", nullable = false)
+    private Business business;
 
 
 }

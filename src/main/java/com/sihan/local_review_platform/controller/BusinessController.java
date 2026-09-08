@@ -4,6 +4,7 @@ import com.sihan.local_review_platform.dto.BusinessResponse;
 import com.sihan.local_review_platform.dto.CreateBusinessRequest;
 import com.sihan.local_review_platform.dto.UpdateBusinessRequest;
 import com.sihan.local_review_platform.service.BusinessService;
+import com.sihan.local_review_platform.service.RoleGuard;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.*;
@@ -15,13 +16,16 @@ import com.sihan.local_review_platform.common.ApiResponse;
 @RequestMapping("/api/businesses")
 public class BusinessController {
     private final BusinessService businessService;
+    private final RoleGuard roleGuard;
 
-    public BusinessController(BusinessService businessService){
+    public BusinessController(BusinessService businessService, RoleGuard roleGuard){
         this.businessService = businessService;
+        this.roleGuard = roleGuard;
     }
 
     @PostMapping
     public ApiResponse<BusinessResponse> createBusiness(@Valid @RequestBody CreateBusinessRequest request){
+        roleGuard.requireMerchant();
         return ApiResponse.ok(businessService.createBusiness(request));
     }
 
@@ -42,17 +46,26 @@ public class BusinessController {
 
     @DeleteMapping("/{id}")
     public ApiResponse<Void> deleteBusiness(@PathVariable Long id){
+        roleGuard.requireMerchant();
         businessService.deleteBusiness(id);
         return ApiResponse.ok(null);
     }
 
     @PutMapping("/{id}")
     public ApiResponse<BusinessResponse> updatedBusiness(@PathVariable Long id, @RequestBody UpdateBusinessRequest request){
+        roleGuard.requireMerchant();
         return ApiResponse.ok(businessService.updateBusiness(id,request));
+    }
+
+    @PostMapping("/{id}/close")
+    public ApiResponse<BusinessResponse> closeBusiness(@PathVariable Long id) {
+        roleGuard.requireMerchant();
+        return ApiResponse.ok(businessService.closeBusiness(id));
     }
 
     @PostMapping("/geo/load")
     public ApiResponse<Void> loadBusinessGeoToRedis(){
+        roleGuard.requireMerchant();
         businessService.loadBusinessGeoToRedis();
         return ApiResponse.ok("Business GEO loaded to Redis", null);
     }

@@ -6,7 +6,12 @@ import com.sihan.local_review_platform.dto.BusinessResponse;
 import com.sihan.local_review_platform.dto.CreateBusinessRequest;
 import com.sihan.local_review_platform.dto.UpdateBusinessRequest;
 import com.sihan.local_review_platform.entity.Business;
+import com.sihan.local_review_platform.entity.BusinessStatus;
+import com.sihan.local_review_platform.entity.UserRole;
 import com.sihan.local_review_platform.repository.BusinessRepository;
+import com.sihan.local_review_platform.repository.BrandRepository;
+import com.sihan.local_review_platform.repository.VoucherRepository;
+import com.sihan.local_review_platform.common.BusinessException;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageRequest;
@@ -21,6 +26,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.springframework.data.redis.connection.RedisGeoCommands;
 import com.sihan.local_review_platform.utils.RedisKeys;
+import com.sihan.local_review_platform.utils.UserContext;
 
 
 @Service
@@ -28,14 +34,20 @@ public class BusinessService {
     private final BusinessRepository businessRepository;
     private final StringRedisTemplate stringRedisTemplate;
     private final CacheClient cacheClient;
+    private final BrandRepository brandRepository;
+    private final VoucherRepository voucherRepository;
 
     public BusinessService(
             BusinessRepository businessRepository,
             StringRedisTemplate stringRedisTemplate,
-            CacheClient cacheClient) {
+            CacheClient cacheClient,
+            BrandRepository brandRepository,
+            VoucherRepository voucherRepository) {
         this.businessRepository = businessRepository;
         this.stringRedisTemplate = stringRedisTemplate;
         this.cacheClient = cacheClient;
+        this.brandRepository = brandRepository;
+        this.voucherRepository = voucherRepository;
     }
 
     public BusinessResponse createBusiness(CreateBusinessRequest request) {
@@ -44,9 +56,14 @@ public class BusinessService {
         business.setName(request.getName());
         business.setCategory(request.getCategory());
         business.setAddress(request.getAddress());
-        business.setRating(request.getRating());
         business.setLongitude(request.getLongitude());
         business.setLatitude(request.getLatitude());
+        business.setMerchantId(UserContext.requireUserId());
+        business.setStatus(BusinessStatus.ACTIVE);
+        if (request.getBrandId() != null) {
+            business.setBrand(brandRepository.findById(request.getBrandId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Brand not found")));
+        }
 
         Business savedBusiness = businessRepository.save(business);
 
@@ -81,9 +98,11 @@ public class BusinessService {
             }
         }
 
-        Sort sortObj = direction.equalsIgnoreCase("desc")
-                ? Sort.by(field).descending()
-                : Sort.by(field).ascending();
+        boolean ratingDescending = field.equals("rating") && direction.equalsIgnoreCase("desc");
+        Sort.Order order = direction.equalsIgnoreCase("desc")
+                ? Sort.Order.desc(field)
+                : Sort.Order.asc(field);
+        Sort sortObj = ratingDescending ? Sort.unsorted() : Sort.by(order);
 
         Pageable pageable = PageRequest.of(
                 page,
@@ -91,19 +110,32 @@ public class BusinessService {
                 sortObj
         );
 
-        if (keyword != null && !keyword.isBlank()) {
-            return businessRepository
-                    .findByNameContainingIgnoreCaseOrCategoryContainingIgnoreCaseOrAddressContainingIgnoreCase(
-                            keyword,
-                            keyword,
-                            keyword,
-                            pageable
-                    )
-                    .map(this::toResponse);
+        boolean merchant = UserContext.get() != null && UserContext.get().role() == UserRole.MERCHANT;
+        boolean hasKeyword = keyword != null && !keyword.isBlank();
+        Page<Business> businesses;
+        if (merchant) {
+            Long merchantId = UserContext.requireUserId();
+            if (ratingDescending) {
+                businesses = hasKeyword
+                        ? businessRepository.searchByMerchantIdOrderByRatingDesc(merchantId, keyword.trim(), pageable)
+                        : businessRepository.findByMerchantIdOrderByRatingDesc(merchantId, pageable);
+            } else {
+                businesses = hasKeyword
+                        ? businessRepository.searchByMerchantId(merchantId, keyword.trim(), pageable)
+                        : businessRepository.findByMerchantId(merchantId, pageable);
+            }
+        } else {
+            if (ratingDescending) {
+                businesses = hasKeyword
+                        ? businessRepository.searchByStatusOrderByRatingDesc(BusinessStatus.ACTIVE, keyword.trim(), pageable)
+                        : businessRepository.findByStatusOrderByRatingDesc(BusinessStatus.ACTIVE, pageable);
+            } else {
+                businesses = hasKeyword
+                        ? businessRepository.searchByStatus(BusinessStatus.ACTIVE, keyword.trim(), pageable)
+                        : businessRepository.findByStatus(BusinessStatus.ACTIVE, pageable);
+            }
         }
-
-        return businessRepository.findAll(pageable)
-                .map(this::toResponse);
+        return businesses.map(this::toResponse);
     }
 
     public BusinessResponse getBusinessById(Long id) {
@@ -122,6 +154,11 @@ public class BusinessService {
                     "Business not found"
             );
         }
+        boolean owner = UserContext.get() != null && UserContext.get().role() == UserRole.MERCHANT
+                && UserContext.requireUserId().equals(business.getMerchantId());
+        if (business.getStatus() != BusinessStatus.ACTIVE && !owner) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Business not found");
+        }
         return toResponse(business);
     }
 
@@ -130,12 +167,29 @@ public class BusinessService {
         if (!businessRepository.existsById(id)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Business is not found");
         }
+        if (voucherRepository.existsByBusinessId(id)) {
+            throw new BusinessException("BUSINESS_HAS_VOUCHERS",
+                    "该门店仍有关联营销活动，请先删除营销活动", HttpStatus.CONFLICT);
+        }
         businessRepository.deleteById(id);
         stringRedisTemplate.delete(RedisKeys.BUSINESS_CACHE + id);
         stringRedisTemplate.opsForZSet().remove(
                 RedisKeys.BUSINESS_GEO,
                 id.toString()
         );
+    }
+
+    public BusinessResponse closeBusiness(Long id) {
+        Business business = businessRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Business not found"));
+        if (!UserContext.requireUserId().equals(business.getMerchantId())) {
+            throw new BusinessException("BUSINESS_NOT_OWNED", "只能关闭自己创建的门店", HttpStatus.FORBIDDEN);
+        }
+        business.setStatus(BusinessStatus.CLOSED);
+        Business saved = businessRepository.save(business);
+        stringRedisTemplate.delete(RedisKeys.BUSINESS_CACHE + id);
+        stringRedisTemplate.opsForZSet().remove(RedisKeys.BUSINESS_GEO, id.toString());
+        return toResponse(saved);
     }
 
     public BusinessResponse updateBusiness(Long id, UpdateBusinessRequest request) {
@@ -166,11 +220,15 @@ public class BusinessService {
         if (request.getLatitude() != null) {
             existingBusiness.setLatitude(request.getLatitude());
         }
+        if (request.getBrandId() != null) {
+            existingBusiness.setBrand(brandRepository.findById(request.getBrandId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Brand not found")));
+        }
         Business saved = businessRepository.save(existingBusiness);
         stringRedisTemplate.delete(RedisKeys.BUSINESS_CACHE + id);
 
-        if (saved.getLongitude() != null &&
-        saved.getLatitude() != null){
+        if (saved.getStatus() == BusinessStatus.ACTIVE
+                && saved.getLongitude() != null && saved.getLatitude() != null){
             stringRedisTemplate.opsForGeo().add(
                     RedisKeys.BUSINESS_GEO,
                     new Point(
@@ -179,6 +237,8 @@ public class BusinessService {
                     ),
                     saved.getId().toString()
             );
+        } else {
+            stringRedisTemplate.opsForZSet().remove(RedisKeys.BUSINESS_GEO, saved.getId().toString());
         }
         return toResponse(saved);
     }
@@ -187,7 +247,8 @@ public class BusinessService {
         List<Business> businesses = businessRepository.findAll();
 
         for (Business business : businesses) {
-            if (business.getLongitude() != null && business.getLatitude() != null) {
+            if (business.getStatus() == BusinessStatus.ACTIVE
+                    && business.getLongitude() != null && business.getLatitude() != null) {
                 stringRedisTemplate.opsForGeo().add(
                         RedisKeys.BUSINESS_GEO,
                         new Point(business.getLongitude(), business.getLatitude()),
@@ -226,7 +287,7 @@ public class BusinessService {
                     Business business = businessRepository.findById(id)
                             .orElse(null);
 
-                    if (business == null) {
+                    if (business == null || business.getStatus() != BusinessStatus.ACTIVE) {
                         return null;
                     }
 
@@ -250,7 +311,10 @@ public class BusinessService {
                 business.getRating(),
                 business.getCreatedAt(),
                 business.getLongitude(),
-                business.getLatitude()
+                business.getLatitude(),
+                business.getBrand() == null ? null : business.getBrand().getId(),
+                business.getBrand() == null ? null : business.getBrand().getName(),
+                business.getStatus()
         );
     }
 }

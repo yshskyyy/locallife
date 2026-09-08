@@ -1,3 +1,5 @@
 package com.sihan.local_review_platform.dto;
 
-public record UserSession(Long userId, String phone, String nickname) {}
+import com.sihan.local_review_platform.entity.UserRole;
+
+public record UserSession(Long userId, String phone, String nickname, UserRole role) {}

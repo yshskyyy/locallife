@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-local_review}
       POSTGRES_USER: ${POSTGRES_USER:-local_review}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-phase0_local_only_change_me}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Copy .env.example to .env and set POSTGRES_PASSWORD}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
@@ -24,7 +24,7 @@ services:
     image: redis:7.4-alpine
     restart: unless-stopped
     environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-phase0_local_only_change_me}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Copy .env.example to .env and set REDIS_PASSWORD}
     command:
       - sh
       - -c
@@ -46,17 +46,22 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        MAVEN_OPTS: ${MAVEN_OPTS:-}
     restart: unless-stopped
     environment:
+      TZ: Asia/Shanghai
       DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-local_review}
       DB_USERNAME: ${POSTGRES_USER:-local_review}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-phase0_local_only_change_me}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Copy .env.example to .env and set POSTGRES_PASSWORD}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-phase0_local_only_change_me}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Copy .env.example to .env and set REDIS_PASSWORD}
       TOKEN_TTL: ${TOKEN_TTL:-30m}
       CODE_TTL: ${CODE_TTL:-5m}
       ORDER_STREAM_MAX_RETRIES: ${ORDER_STREAM_MAX_RETRIES:-3}
+      ORDER_STREAM_KEY: ${ORDER_STREAM_KEY:-stream.orders}
+      ORDER_STREAM_GROUP: ${ORDER_STREAM_GROUP:-order-group}
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     depends_on:
@@ -72,6 +77,29 @@ services:
       timeout: 5s
       retries: 12
       start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+        HTTP_PROXY: ${BUILD_HTTP_PROXY:-}
+        HTTPS_PROXY: ${BUILD_HTTPS_PROXY:-}
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q --spider http://127.0.0.1/
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
 volumes:
   postgres_data:

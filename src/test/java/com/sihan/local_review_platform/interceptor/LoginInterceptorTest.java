@@ -1,6 +1,7 @@
 package com.sihan.local_review_platform.interceptor;
 
 import com.sihan.local_review_platform.dto.UserSession;
+import com.sihan.local_review_platform.entity.UserRole;
 import com.sihan.local_review_platform.service.AuthService;
 import com.sihan.local_review_platform.utils.UserContext;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,7 +22,7 @@ class LoginInterceptorTest {
         HttpServletRequest request = mock(HttpServletRequest.class);
         HttpServletResponse response = mock(HttpServletResponse.class);
         when(request.getHeader("Authorization")).thenReturn("Bearer token");
-        when(auth.getSession("Bearer token", true)).thenReturn(new UserSession(42L, "0412345678", "user_5678"));
+        when(auth.getSession("Bearer token", true)).thenReturn(new UserSession(42L, "0412345678", "user_5678", UserRole.USER));
         LoginInterceptor interceptor = new LoginInterceptor(auth);
 
         assertTrue(interceptor.preHandle(request, response, new Object()));

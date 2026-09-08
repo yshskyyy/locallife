@@ -17,12 +17,17 @@ public class User {
     @Column(nullable = false, length = 64)
     private String nickname;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 16)
+    private UserRole role = UserRole.USER;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
     @PrePersist
     void prePersist() {
         if (createdAt == null) createdAt = LocalDateTime.now();
+        if (role == null) role = UserRole.USER;
     }
 
     public Long getId() { return id; }
@@ -30,5 +35,7 @@ public class User {
     public void setPhone(String phone) { this.phone = phone; }
     public String getNickname() { return nickname; }
     public void setNickname(String nickname) { this.nickname = nickname; }
+    public UserRole getRole() { return role; }
+    public void setRole(UserRole role) { this.role = role; }
     public LocalDateTime getCreatedAt() { return createdAt; }
 }

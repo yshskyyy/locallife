@@ -26,14 +26,22 @@ public class Business {
 
     private Double latitude;
 
+    @ManyToOne
+    @JoinColumn(name = "brand_id")
+    private Brand brand;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 16)
+    private BusinessStatus status = BusinessStatus.ACTIVE;
+
+    private Long merchantId;
+
 
 
     @PrePersist
     private void prePersist(){
         this.createdAt = LocalDateTime.now();
-        if (this.rating == null){
-            this.rating = 0.0;
-        }
+        if (this.status == null) this.status = BusinessStatus.ACTIVE;
     }
 
     public String getName() {

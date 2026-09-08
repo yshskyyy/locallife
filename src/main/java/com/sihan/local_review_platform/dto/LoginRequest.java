@@ -11,6 +11,8 @@ public class LoginRequest {
     private String phone;
     @NotBlank
     private String code;
+    @Pattern(regexp = "^(USER|MERCHANT)$")
+    private String loginMode = "USER";
     public String getPhone() {
         return phone;
     }
@@ -19,6 +21,8 @@ public class LoginRequest {
         return code;
     }
 
+    public String getLoginMode() { return loginMode; }
+
     public void setPhone(String phone) {
         this.phone = phone;
     }
@@ -26,4 +30,6 @@ public class LoginRequest {
     public void setCode(String code) {
         this.code = code;
     }
+
+    public void setLoginMode(String loginMode) { this.loginMode = loginMode; }
 }

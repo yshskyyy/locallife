@@ -2,6 +2,7 @@
 local voucherId = ARGV[1]
 local userId = ARGV[2]
 local requestId = ARGV[3]
+local streamKey = ARGV[4]
 
 local stockKey = "seckill:stock:" .. voucherId
 local orderKey = "seckill:order:" .. voucherId
@@ -21,7 +22,7 @@ redis.call("SADD", orderKey, userId)
 
 redis.call(
     "XADD",
-    "stream.orders",
+    streamKey,
     "*",
     "userId", userId,
     "voucherId", voucherId,
