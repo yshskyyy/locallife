@@ -241,28 +241,43 @@ docker compose ps
 
 `.env.example` 提供本地占位配置。复制后请替换其中的示例凭据；`.env` 已被 `.gitignore` 忽略，不应提交到仓库。
 
-等待四个服务均显示 `healthy`：
+默认启用 Demo 数据，方便快速体验：
+
+```env
+DEMO_DATA_ENABLED=true
+```
+
+Demo 模式会初始化两家示例门店和一个营销活动。
+
+如果希望从空白数据环境开始，请在首次启动前将 `.env` 修改为：
+
+```env
+DEMO_DATA_ENABLED=false
+```
+
+然后正常启动：
+
+```bash
+docker compose up --build -d
+```
+
+如果已经启动过 Demo 模式，需要重新创建空白数据环境：
+
+```bash
+docker compose down -v
+docker compose up -d
+```
+
+> `docker compose down -v` 会删除本地 PostgreSQL 和 Redis 数据卷，请仅在不需要保留现有数据时使用。
+
+等待四个服务均显示 `healthy`。启动完成后：
 
 | Service | Address |
 | --- | --- |
 | Frontend | http://localhost:3000 |
 | Backend | http://localhost:8080 |
-| PostgreSQL | localhost:5432 |
-| Redis | localhost:6379 |
 
-停止服务并保留数据：
-
-```bash
-docker compose down
-```
-
-仅在确认可以清空当前项目本地数据时使用：
-
-```bash
-docker compose down -v
-```
-
-后端容器通过 `postgres` 和 `redis` 服务名连接依赖，并等待两者 healthy 后启动；frontend 等待 backend healthy。PostgreSQL 空数据卷首次启动时自动执行 `src/main/resources/schema.sql`，Spring Boot 使用 `ddl-auto=validate` 检查实体与 schema 是否一致。
+PostgreSQL 与 Redis 默认仅供 Docker 内部服务访问，不暴露宿主机端口。
 
 ## API 与 Demo
 
