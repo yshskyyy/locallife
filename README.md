@@ -232,7 +232,7 @@ VoucherOrder 是领取历史，不会因为活动过期或门店关闭而删除�
 仅需安装 Docker 与 Docker Compose v2：
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/yshskyyy/locallife.git
 cd locallife
 cp .env.example .env
 docker compose up --build -d
